@@ -38,16 +38,35 @@ function OverallRing({ score }) {
 }
 
 export default function Report({ report, onReset }) {
-  const { repoUrl, scannedAt, critical_vulnerabilities, complexityErrors, eslintData, auditOutput } = report
+  const { repoUrl, scannedAt, auditOutput, complexityErrors, eslintData } = report
 
   // Basic scoring logic: 100 points minus deductions
-  const vulnPenalty = (critical_vulnerabilities || 0) * 20
+  const critical = auditOutput?.metadata?.vulnerabilities?.critical || 0
+  const high = auditOutput?.metadata?.vulnerabilities?.high || 0
+  const totalVulns = critical + high
+  
+  const vulnPenalty = totalVulns * 15
   const complexityPenalty = (complexityErrors || 0) * 5
   let overallScore = 100 - vulnPenalty - complexityPenalty
   if (overallScore < 0) overallScore = 0
 
   const color = getOverallColor(overallScore)
   const status = overallScore >= 80 ? 'PASS' : 'FAIL'
+
+  const getVulnList = () => {
+    if (!auditOutput) return []
+    if (auditOutput.vulnerabilities) {
+      return Object.values(auditOutput.vulnerabilities).filter(v => 
+        v.severity === 'high' || v.severity === 'critical'
+      )
+    }
+    if (auditOutput.advisories) {
+      return Object.values(auditOutput.advisories).filter(v =>
+        v.severity === 'high' || v.severity === 'critical'
+      )
+    }
+    return []
+  }
 
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto', padding: '2rem 1.5rem 4rem' }}>
@@ -131,7 +150,7 @@ export default function Report({ report, onReset }) {
               : 'Critical issues detected. Immediate action required.'}
           </h2>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.7 }}>
-            Found {critical_vulnerabilities || 0} critical vulnerabilities and {complexityErrors || 0} overly complex functions.
+            Found {totalVulns || 0} critical/high vulnerabilities and {complexityErrors || 0} overly complex functions.
           </p>
 
           <div style={{ marginTop: '1.5rem' }}>
@@ -161,17 +180,45 @@ export default function Report({ report, onReset }) {
               <span style={{ fontSize: 28 }}>🔒</span>
               <h3 style={{ fontSize: '1.25rem', fontWeight: 600 }}>Security Dependencies</h3>
             </div>
-            <span style={{ fontSize: '2rem', fontWeight: 700, color: (critical_vulnerabilities || 0) > 0 ? 'var(--fail)' : 'var(--pass)' }}>
-              {critical_vulnerabilities || 0}
+            <span style={{ fontSize: '2rem', fontWeight: 700, color: totalVulns > 0 ? 'var(--fail)' : 'var(--pass)' }}>
+              {totalVulns || 0}
             </span>
           </div>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem' }}>
-            Critical vulnerabilities found via npm audit.
+            High & Critical vulnerabilities found via npm audit.
           </p>
-          {(critical_vulnerabilities || 0) > 0 && (
-             <div style={{ background: 'var(--bg)', padding: '1rem', borderRadius: 8, fontSize: '0.85rem', color: 'var(--fail)', fontFamily: 'var(--font-mono)' }}>
-               Run 'npm audit' locally to see detailed remediation steps.
-             </div>
+          {totalVulns > 0 ? (
+            <div style={{ background: 'var(--bg)', padding: '1rem', borderRadius: 8, maxHeight: 200, overflowY: 'auto' }}>
+              {getVulnList().map((vuln, idx) => (
+                <div key={idx} style={{ marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid var(--border)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <span style={{ fontSize: '0.85rem', fontFamily: 'var(--font-mono)', color: '#a5b4fc', wordBreak: 'break-all' }}>
+                      {vuln.name || vuln.module_name}
+                    </span>
+                    <span style={{ 
+                      fontSize: '0.7rem', 
+                      padding: '2px 8px', 
+                      borderRadius: 100, 
+                      background: vuln.severity === 'critical' ? 'rgba(244,63,94,0.1)' : 'rgba(245,158,11,0.1)',
+                      color: vuln.severity === 'critical' ? 'var(--fail)' : '#f59e0b',
+                      textTransform: 'uppercase',
+                      fontWeight: 700
+                    }}>
+                      {vuln.severity}
+                    </span>
+                  </div>
+                  {vuln.via && Array.isArray(vuln.via) && vuln.via.filter(v => typeof v === 'object' && v.title).slice(0,1).map((viaItem, i) => (
+                     <div key={i} style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', lineHeight: 1.4 }}>
+                       {viaItem.title}
+                     </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ background: 'var(--bg)', padding: '1rem', borderRadius: 8, fontSize: '0.85rem', color: 'var(--pass)', fontFamily: 'var(--font-mono)' }}>
+               No critical or high vulnerabilities found!
+            </div>
           )}
         </div>
 
@@ -187,7 +234,7 @@ export default function Report({ report, onReset }) {
             </span>
           </div>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem' }}>
-            Functions exceeding complexity threshold (branching depth > 10).
+            Functions exceeding complexity threshold (branching depth &gt; 10).
           </p>
           {(eslintData && eslintData.length > 0) ? (
             <div style={{ background: 'var(--bg)', padding: '1rem', borderRadius: 8, maxHeight: 200, overflowY: 'auto' }}>

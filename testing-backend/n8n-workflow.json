@@ -15,7 +15,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const { execSync } = require('child_process');\n\nconst repoUrl = $input.first().json.body.repoUrl;\ntry {\n  const cmd = `mkdir -p /tmp/web-audit-platform && cd /tmp/web-audit-platform && rm -rf repo && git clone ${repoUrl} repo`;\n  const stdout = execSync(cmd, { encoding: 'utf-8' });\n  return [{ json: { repoUrl, success: true, stdout } }];\n} catch (error) {\n  return [{ json: { repoUrl, success: false, error: error.message, stdout: error.stdout } }];\n}"
+        "jsCode": "const { execSync } = require('child_process');\n\nconst repoUrl = $input.first().json.body.repoUrl;\ntry {\n  const cmd = `mkdir -p /tmp/web-audit-platform && cd /tmp/web-audit-platform && rm -rf repo && git clone ${repoUrl} repo`;\n  const stdout = execSync(cmd, { encoding: 'utf-8', stdio: 'pipe' });\n  return [{ json: { repoUrl, success: true, stdout } }];\n} catch (error) {\n  throw new Error(`Failed to clone repository. Are you sure this is a public Git repo?`);\n}"
       },
       "id": "5f606da0-d29b-4f9e-99cb-db8b8a5d3f21",
       "name": "Clone/Pull Code",
@@ -25,7 +25,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const { execSync } = require('child_process');\n\nlet output;\ntry {\n  const cmd = `cd /tmp/web-audit-platform/repo && npm install --package-lock-only && npm audit --json`;\n  output = execSync(cmd, { encoding: 'utf-8' });\n} catch (error) {\n  output = error.stdout || '{}';\n}\n\nlet vulnerabilities = 0;\nlet auditData = {};\ntry {\n  auditData = JSON.parse(output);\n  vulnerabilities = auditData.metadata?.vulnerabilities?.critical || 0;\n} catch(e) {}\n\nconst previousData = $input.first().json;\nreturn [{ json: { ...previousData, auditOutput: auditData, critical_vulnerabilities: vulnerabilities } }];"
+        "jsCode": "const { execSync } = require('child_process');\n\nlet vulnerabilities = 0;\nlet auditData = {};\n\ntry {\n  const cmd = `find /tmp/web-audit-platform/repo -name \"package.json\" -not -path \"*/node_modules/*\" -exec dirname {} \\\\;`;\n  const dirs = execSync(cmd, { encoding: 'utf-8' }).split('\\n').filter(Boolean);\n  \n  for (const dir of dirs) {\n    try {\n      execSync(`cd \"${dir}\" && npm install --package-lock-only`, { stdio: 'ignore' });\n      execSync(`cd \"${dir}\" && npm audit --json`, { encoding: 'utf-8', stdio: 'pipe' });\n    } catch (err) {\n      if (err.stdout) {\n        try {\n          const parsed = JSON.parse(err.stdout);\n          vulnerabilities += parsed.metadata?.vulnerabilities?.critical || 0;\n          auditData = parsed; // Keep the last one for reference\n        } catch (e) {}\n      }\n    }\n  }\n} catch (error) {\n}\n\nconst previousData = $input.first().json;\nreturn [{ json: { ...previousData, auditOutput: auditData, critical_vulnerabilities: vulnerabilities } }];"
       },
       "id": "4b68e001-c852-4fc8-9f15-bc758369165d",
       "name": "Dependency Audit",
@@ -35,7 +35,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const { execSync } = require('child_process');\n\nlet output;\ntry {\n  const cmd = `cd /tmp/web-audit-platform/repo && npm install eslint --no-save && npx eslint . --format json`;\n  output = execSync(cmd, { encoding: 'utf-8' });\n} catch (error) {\n  output = error.stdout || '[]';\n}\n\nlet complexityErrors = 0;\nlet eslintData = [];\ntry {\n  eslintData = JSON.parse(output);\n  complexityErrors = eslintData.reduce((acc, current) => acc + current.errorCount, 0);\n} catch(e) {}\n\nconst previousData = $input.first().json;\nreturn [{\n  json: {\n    ...previousData,\n    complexityErrors: complexityErrors,\n    eslintData: eslintData,\n    scannedAt: new Date().toISOString()\n  }\n}];"
+        "jsCode": "const { execSync } = require('child_process');\n\nlet output;\ntry {\n  const setupCmd = `cd /tmp/web-audit-platform/repo && npm install eslint@8 --no-save && echo '{\"env\":{\"browser\":true,\"node\":true,\"es2021\":true},\"extends\":\"eslint:recommended\",\"parserOptions\":{\"ecmaVersion\":12,\"sourceType\":\"module\"},\"rules\":{\"complexity\":[\"error\",10]}}' > .eslintrc.json`;\n  execSync(setupCmd);\n  const cmd = `cd /tmp/web-audit-platform/repo && npx eslint . --format json`;\n  output = execSync(cmd, { encoding: 'utf-8' });\n} catch (error) {\n  output = error.stdout || '[]';\n}\n\nlet complexityErrors = 0;\nlet eslintData = [];\ntry {\n  eslintData = JSON.parse(output);\n  complexityErrors = eslintData.reduce((acc, current) => acc + current.errorCount, 0);\n} catch(e) {}\n\nconst previousData = $input.first().json;\nreturn [{\n  json: {\n    ...previousData,\n    complexityErrors: complexityErrors,\n    eslintData: eslintData,\n    scannedAt: new Date().toISOString()\n  }\n}];"
       },
       "id": "3c847e11-e123-4abc-999d-ed8731234bef",
       "name": "Complexity Scan",
@@ -45,15 +45,45 @@
     },
     {
       "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "",
+          "mode": "id"
+        },
+        "mappingMode": "defineBelow",
+        "valuesUi": {
+          "mappingParameters": [
+            { "name": "Date", "value": "={{ $json.scannedAt }}" },
+            { "name": "Repository", "value": "={{ $json.repoUrl }}" },
+            { "name": "Vulnerabilities", "value": "={{ $json.critical_vulnerabilities }}" },
+            { "name": "Complexity Errors", "value": "={{ $json.complexityErrors }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "google-sheets-node",
+      "name": "Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [1280, 300]
+    },
+    {
+      "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ $json }}",
+        "responseBody": "={{ $node['Complexity Scan'].json }}",
         "options": {}
       },
       "id": "4f47f088-7a60-4d87-8a06-d7d08de5fec5",
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [1300, 300]
+      "position": [1500, 300]
     }
   ],
   "connections": {
@@ -91,6 +121,17 @@
       ]
     },
     "Complexity Scan": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets": {
       "main": [
         [
           {
