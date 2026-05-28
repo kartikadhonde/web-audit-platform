@@ -1,0 +1,23 @@
+const express = require('express')
+const { chromium } = require('playwright')
+
+const app = express()
+app.use(express.json())
+
+app.post('/scan', async (req, res) => {
+  const { url } = req.body
+  const browser = await chromium.launch()
+  const page = await browser.newPage()
+  await page.goto(url)
+  const title = await page.title()
+  const screenshot = await page.screenshot({ fullPage: true })
+  await browser.close()
+
+  res.json({
+    url,
+    title,
+    screenshot: screenshot.toString('base64')
+  })
+})
+
+app.listen(3000, () => console.log('Backend running on port 3000'))

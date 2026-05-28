@@ -1,0 +1,21 @@
+{
+  "name": "testing-backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "axe-core": "^4.11.4",
+    "cheerio": "^1.2.0",
+    "chrome-launcher": "^1.2.1",
+    "express": "^5.2.1",
+    "lighthouse": "^13.3.0",
+    "playwright": "^1.60.0"
+  }
+}

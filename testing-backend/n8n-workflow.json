@@ -1,0 +1,131 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "13eb371d-1e25-45df-b589-c5b999969691",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [0, 0],
+      "id": "webhook-node",
+      "name": "Webhook"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:3000/scan",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ url: $json.body.url }) }}",
+        "options": {
+          "timeout": 90000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [200, 0],
+      "id": "http-node",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "jsCode": "const scan = $('HTTP Request').first().json;\n\nreturn [{\n  json: {\n    url:           scan.url,\n    overallScore:  scan.overallScore,\n    status:        scan.status,\n    seo:           scan.workers?.seo?.score ?? 0,\n    performance:   scan.workers?.performance?.score ?? 0,\n    accessibility: scan.workers?.accessibility?.score ?? 0,\n    security:      scan.workers?.security?.score ?? 0,\n    links:         scan.workers?.links?.score ?? 0,\n    scannedAt:     scan.scannedAt\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 0],
+      "id": "code-node",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "10bElszM_XQDEMmVnjnZeJXvKNCWvihRyHkGB9_deHJc",
+          "mode": "list",
+          "cachedResultName": "n8n pw lh",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/10bElszM_XQDEMmVnjnZeJXvKNCWvihRyHkGB9_deHJc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=386138626",
+          "mode": "list",
+          "cachedResultName": "Sheet2",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/10bElszM_XQDEMmVnjnZeJXvKNCWvihRyHkGB9_deHJc/edit#gid=386138626"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "url": "={{ $json.url }}",
+            "overallScore": "={{ $json.overallScore }}",
+            "status": "={{ $json.status }}",
+            "seo": "={{ $json.seo }}",
+            "performance": "={{ $json.performance }}",
+            "accessibility": "={{ $json.accessibility }}",
+            "security": "={{ $json.security }}",
+            "links": "={{ $json.links }}",
+            "scannedAt": "={{ $json.scannedAt }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            { "id": "url", "displayName": "url", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "overallScore", "displayName": "overallScore", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "status", "displayName": "status", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "seo", "displayName": "seo", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "performance", "displayName": "performance", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "accessibility", "displayName": "accessibility", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "security", "displayName": "security", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "links", "displayName": "links", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "scannedAt", "displayName": "scannedAt", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [600, 0],
+      "id": "sheets-node",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "l0L3rwKdgc7ppUma",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $('HTTP Request').first().json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [800, 0],
+      "id": "respond-node",
+      "name": "Respond to Webhook"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [ [ { "node": "HTTP Request", "type": "main", "index": 0 } ] ]
+    },
+    "HTTP Request": {
+      "main": [ [ { "node": "Code in JavaScript", "type": "main", "index": 0 } ] ]
+    },
+    "Code in JavaScript": {
+      "main": [ [ { "node": "Append row in sheet", "type": "main", "index": 0 } ] ]
+    },
+    "Append row in sheet": {
+      "main": [ [ { "node": "Respond to Webhook", "type": "main", "index": 0 } ] ]
+    }
+  }
+}
