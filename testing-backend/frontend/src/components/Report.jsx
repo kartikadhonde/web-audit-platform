@@ -1,18 +1,8 @@
 import React, { useState } from 'react'
-import ScoreCard from './ScoreCard'
-
-const WORKERS = [
-  { key: 'performance',   title: 'Performance',   icon: '⚡' },
-  { key: 'seo',           title: 'SEO',            icon: '📝' },
-  { key: 'accessibility', title: 'Accessibility',  icon: '♿' },
-  { key: 'security',      title: 'Security',       icon: '🔒' },
-  { key: 'links',         title: 'Broken Links',   icon: '🔗' },
-  { key: 'visual',        title: 'Visual',         icon: '📸' },
-]
 
 function getOverallColor(score) {
-  if (score >= 80) return '#22c55e'
-  if (score >= 60) return '#f59e0b'
+  if (score >= 90) return '#22c55e'
+  if (score >= 70) return '#f59e0b'
   return '#f43f5e'
 }
 
@@ -41,27 +31,27 @@ function OverallRing({ score }) {
         alignItems: 'center', justifyContent: 'center',
       }}>
         <span style={{ fontSize: '2.8rem', fontWeight: 800, color, lineHeight: 1 }}>{score}</span>
-        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>Overall Score</span>
+        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>Health Score</span>
       </div>
     </div>
   )
 }
 
 export default function Report({ report, onReset }) {
-  const [expandedCard, setExpandedCard] = useState(null)
-  const [showScreenshot, setShowScreenshot] = useState(false)
+  const { repoUrl, scannedAt, critical_vulnerabilities, complexityErrors, eslintData, auditOutput } = report
 
-  const { url, overallScore, status, scannedAt, workers } = report
+  // Basic scoring logic: 100 points minus deductions
+  const vulnPenalty = (critical_vulnerabilities || 0) * 20
+  const complexityPenalty = (complexityErrors || 0) * 5
+  let overallScore = 100 - vulnPenalty - complexityPenalty
+  if (overallScore < 0) overallScore = 0
+
   const color = getOverallColor(overallScore)
-  const screenshot = workers?.visual?.screenshot
-
-  function toggleCard(key) {
-    setExpandedCard(prev => prev === key ? null : key)
-  }
+  const status = overallScore >= 80 ? 'PASS' : 'FAIL'
 
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto', padding: '2rem 1.5rem 4rem' }}>
-
+      
       {/* Header */}
       <div className="fade-up" style={{
         display: 'flex', alignItems: 'center',
@@ -71,21 +61,20 @@ export default function Report({ report, onReset }) {
       }}>
         <div>
           <h1 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: 4 }}>
-            Audit Report
+            Repository Audit Report
           </h1>
           <div style={{
             fontFamily: 'var(--font-mono)',
             fontSize: '0.82rem',
             color: 'var(--text-secondary)',
           }}>
-            {url}
+            {repoUrl}
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>
-            Scanned {new Date(scannedAt).toLocaleString()}
+            Scanned {scannedAt ? new Date(scannedAt).toLocaleString() : new Date().toLocaleString()}
           </div>
         </div>
         <button
-          id="new-scan-btn"
           onClick={onReset}
           style={{
             padding: '10px 20px',
@@ -135,24 +124,17 @@ export default function Report({ report, onReset }) {
           </div>
 
           <h2 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.5rem' }}>
-            {overallScore >= 80
-              ? 'Looking great! Minor improvements possible.'
-              : overallScore >= 60
-              ? 'Some issues found. Check the details below.'
-              : 'Significant issues detected across multiple areas.'}
+            {overallScore >= 90
+              ? 'Excellent! Your codebase is secure and maintainable.'
+              : overallScore >= 70
+              ? 'Good, but there are a few issues to address.'
+              : 'Critical issues detected. Immediate action required.'}
           </h2>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.7 }}>
-            Scanned {WORKERS.length} dimensions in parallel. Click any card below to see detailed PASS/FAIL results.
+            Found {critical_vulnerabilities || 0} critical vulnerabilities and {complexityErrors || 0} overly complex functions.
           </p>
 
-          {/* Mini score bar */}
           <div style={{ marginTop: '1.5rem' }}>
-            <div style={{
-              display: 'flex', justifyContent: 'space-between',
-              fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 6,
-            }}>
-              <span>0</span><span>50</span><span>100</span>
-            </div>
             <div style={{ height: 8, background: 'rgba(255,255,255,0.06)', borderRadius: 4, overflow: 'hidden' }}>
               <div style={{
                 height: '100%',
@@ -167,97 +149,69 @@ export default function Report({ report, onReset }) {
         </div>
       </div>
 
-      {/* Worker grid */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-        gap: '1.2rem',
-        marginBottom: '2rem',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
+        gap: '1.5rem',
       }}>
-        {WORKERS.map((w, i) => (
-          <ScoreCard
-            key={w.key}
-            title={w.title}
-            icon={w.icon}
-            worker={workers?.[w.key]}
-            animDelay={0.1 * (i + 2)}
-            expanded={expandedCard === w.key}
-            onToggle={() => toggleCard(w.key)}
-          />
-        ))}
+        {/* Vulnerabilities Card */}
+        <div className="glass fade-up fade-up-2" style={{ padding: '2rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 28 }}>🔒</span>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 600 }}>Security Dependencies</h3>
+            </div>
+            <span style={{ fontSize: '2rem', fontWeight: 700, color: (critical_vulnerabilities || 0) > 0 ? 'var(--fail)' : 'var(--pass)' }}>
+              {critical_vulnerabilities || 0}
+            </span>
+          </div>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem' }}>
+            Critical vulnerabilities found via npm audit.
+          </p>
+          {(critical_vulnerabilities || 0) > 0 && (
+             <div style={{ background: 'var(--bg)', padding: '1rem', borderRadius: 8, fontSize: '0.85rem', color: 'var(--fail)', fontFamily: 'var(--font-mono)' }}>
+               Run 'npm audit' locally to see detailed remediation steps.
+             </div>
+          )}
+        </div>
+
+        {/* Complexity Card */}
+        <div className="glass fade-up fade-up-3" style={{ padding: '2rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 28 }}>🧠</span>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 600 }}>Cyclomatic Complexity</h3>
+            </div>
+            <span style={{ fontSize: '2rem', fontWeight: 700, color: (complexityErrors || 0) > 0 ? 'var(--fail)' : 'var(--pass)' }}>
+              {complexityErrors || 0}
+            </span>
+          </div>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem' }}>
+            Functions exceeding complexity threshold (branching depth > 10).
+          </p>
+          {(eslintData && eslintData.length > 0) ? (
+            <div style={{ background: 'var(--bg)', padding: '1rem', borderRadius: 8, maxHeight: 200, overflowY: 'auto' }}>
+              {eslintData.filter(f => f.errorCount > 0).map((file, idx) => (
+                <div key={idx} style={{ marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid var(--border)' }}>
+                  <div style={{ fontSize: '0.85rem', fontFamily: 'var(--font-mono)', color: '#a5b4fc', marginBottom: 8, wordBreak: 'break-all' }}>
+                    {file.filePath.split('/repo/').pop()}
+                  </div>
+                  {file.messages.map((m, i) => (
+                    <div key={i} style={{ display: 'flex', gap: 8, color: 'var(--text-secondary)', fontSize: '0.8rem', marginBottom: 4 }}>
+                      <span style={{ color: 'var(--fail)' }}>✗</span>
+                      <span>Line {m.line}: {m.message}</span>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ background: 'var(--bg)', padding: '1rem', borderRadius: 8, fontSize: '0.85rem', color: 'var(--pass)', fontFamily: 'var(--font-mono)' }}>
+               No overly complex files found!
+            </div>
+          )}
+        </div>
       </div>
-
-      {/* Screenshot panel */}
-      {screenshot && (
-        <div className="glass fade-up" style={{ padding: '1.5rem' }}>
-          <div
-            style={{
-              display: 'flex', alignItems: 'center',
-              justifyContent: 'space-between',
-              cursor: 'pointer', marginBottom: showScreenshot ? '1.2rem' : 0,
-            }}
-            onClick={() => setShowScreenshot(s => !s)}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontSize: 20 }}>📸</span>
-              <span style={{ fontWeight: 600 }}>Screenshot Preview</span>
-            </div>
-            <span style={{
-              color: 'var(--text-muted)', fontSize: '0.85rem',
-              transition: 'transform 0.2s',
-              transform: showScreenshot ? 'rotate(180deg)' : 'none',
-            }}>▾</span>
-          </div>
-          {showScreenshot && (
-            <div style={{ borderRadius: 'var(--radius-md)', overflow: 'hidden', border: '1px solid var(--border)' }}>
-              <img
-                src={`data:image/png;base64,${screenshot}`}
-                alt="Page screenshot"
-                style={{ width: '100%', display: 'block' }}
-              />
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Claude analysis — shown if present */}
-      {workers?.seo?.claudeAnalysis && !workers.seo.claudeAnalysis.error && (
-        <div className="glass fade-up" style={{ padding: '1.5rem', marginTop: '1.2rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: '1rem' }}>
-            <span style={{ fontSize: 20 }}>🤖</span>
-            <span style={{ fontWeight: 600 }}>Claude AI — SEO Analysis</span>
-            <span style={{
-              marginLeft: 'auto',
-              padding: '3px 12px',
-              background: 'var(--accent-soft)',
-              color: '#a5b4fc',
-              borderRadius: 100,
-              fontSize: '0.78rem',
-              fontWeight: 600,
-            }}>Score: {workers.seo.claudeAnalysis.score}/100</span>
-          </div>
-          {workers.seo.claudeAnalysis.issues?.length > 0 && (
-            <div style={{ marginBottom: '1rem' }}>
-              <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Issues</div>
-              {workers.seo.claudeAnalysis.issues.map((issue, i) => (
-                <div key={i} style={{ display: 'flex', gap: 8, color: 'var(--fail)', fontSize: '0.875rem', marginBottom: 4 }}>
-                  <span>✗</span><span>{issue}</span>
-                </div>
-              ))}
-            </div>
-          )}
-          {workers.seo.claudeAnalysis.suggestions?.length > 0 && (
-            <div>
-              <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Suggestions</div>
-              {workers.seo.claudeAnalysis.suggestions.map((s, i) => (
-                <div key={i} style={{ display: 'flex', gap: 8, color: 'var(--pass)', fontSize: '0.875rem', marginBottom: 4 }}>
-                  <span>→</span><span>{s}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
     </div>
   )
 }

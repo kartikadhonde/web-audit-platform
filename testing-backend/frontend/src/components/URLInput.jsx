@@ -13,9 +13,9 @@ export default function URLInput({ onScan, error }) {
   }
 
   const examples = [
-    'https://github.com',
-    'https://stripe.com',
-    'https://vercel.com',
+    'https://github.com/expressjs/express',
+    'https://github.com/facebook/react',
+    'https://github.com/vercel/next.js',
   ]
 
   return (
@@ -46,7 +46,7 @@ export default function URLInput({ onScan, error }) {
           textTransform: 'uppercase',
         }}>
           <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', display: 'inline-block', animation: 'pulse-ring 2s ease infinite' }} />
-          6 Workers · Parallel Execution
+          Dependency & Complexity Scanning
         </div>
 
         <h1 style={{
@@ -60,7 +60,7 @@ export default function URLInput({ onScan, error }) {
           WebkitTextFillColor: 'transparent',
           backgroundClip: 'text',
         }}>
-          Audit any website<br />in seconds
+          Audit any repository<br />in seconds
         </h1>
 
         <p style={{
@@ -70,8 +70,7 @@ export default function URLInput({ onScan, error }) {
           margin: '0 auto',
           lineHeight: 1.7,
         }}>
-          Instant scores for SEO, performance, accessibility,
-          security, and more. Powered by Playwright, Lighthouse & axe-core.
+          Instant metrics for security vulnerabilities and code cyclomatic complexity. Powered by npm audit & ESLint.
         </p>
       </div>
 
@@ -203,12 +202,10 @@ export default function URLInput({ onScan, error }) {
         justifyContent: 'center',
       }}>
         {[
-          { icon: '📝', label: 'SEO' },
-          { icon: '⚡', label: 'Performance' },
-          { icon: '♿', label: 'Accessibility' },
-          { icon: '🔒', label: 'Security' },
-          { icon: '🔗', label: 'Broken Links' },
-          { icon: '📸', label: 'Visual' },
+          { icon: '📦', label: 'Git Clone' },
+          { icon: '📥', label: 'Dependencies' },
+          { icon: '🔒', label: 'npm audit' },
+          { icon: '🧠', label: 'ESLint Complexity' },
         ].map(f => (
           <div key={f.label} style={{
             display: 'flex',

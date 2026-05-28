@@ -22,7 +22,7 @@ export default function App() {
       const res = await fetch(N8N_WEBHOOK, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({ repoUrl: url }),
       })
       if (!res.ok) {
         const payload = await res.json().catch(() => null)
@@ -31,7 +31,7 @@ export default function App() {
       const data = await res.json()
       setReport(data)
     } catch (err) {
-      setError(err?.message || 'Failed to scan the site')
+      setError(err?.message || 'Failed to scan the repository')
     } finally {
       setLoading(false)
     }
@@ -60,12 +60,11 @@ export default function App() {
 
 function LoadingScreen({ url }) {
   const steps = [
-    { label: 'Launching browser', icon: '🌐', delay: 0 },
-    { label: 'Scanning SEO metadata', icon: '📝', delay: 0.6 },
-    { label: 'Running Lighthouse', icon: '⚡', delay: 1.2 },
-    { label: 'Checking accessibility', icon: '♿', delay: 1.8 },
-    { label: 'Auditing security headers', icon: '🔒', delay: 2.4 },
-    { label: 'Crawling links', icon: '🔗', delay: 3.0 },
+    { label: 'Cloning GitHub repository', icon: '📦', delay: 0 },
+    { label: 'Installing dependencies', icon: '📥', delay: 2.0 },
+    { label: 'Running npm audit', icon: '🔒', delay: 4.0 },
+    { label: 'Analyzing cyclomatic complexity', icon: '🧠', delay: 6.0 },
+    { label: 'Generating metrics', icon: '📊', delay: 8.0 },
   ]
 
   return (

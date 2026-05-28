@@ -3,96 +3,61 @@
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "github-webhook",
+        "path": "13eb371d-1e25-45df-b589-c5b999969691",
+        "responseMode": "responseNode",
         "options": {}
       },
       "id": "19b5bfdc-70fd-4fbc-bc05-e4d6a13d2a6a",
-      "name": "GitHub Webhook Trigger",
+      "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
       "position": [400, 300]
     },
     {
       "parameters": {
-        "command": "mkdir -p /tmp/web-audit-platform && cd /tmp/web-audit-platform && if [ ! -d \".git\" ]; then git clone https://github.com/YOUR_USERNAME/web-audit-platform.git .; else git fetch origin && git reset --hard origin/main; fi"
+        "jsCode": "const { execSync } = require('child_process');\n\nconst repoUrl = $input.first().json.body.repoUrl;\ntry {\n  const cmd = `mkdir -p /tmp/web-audit-platform && cd /tmp/web-audit-platform && rm -rf repo && git clone ${repoUrl} repo`;\n  const stdout = execSync(cmd, { encoding: 'utf-8' });\n  return [{ json: { repoUrl, success: true, stdout } }];\n} catch (error) {\n  return [{ json: { repoUrl, success: false, error: error.message, stdout: error.stdout } }];\n}"
       },
       "id": "5f606da0-d29b-4f9e-99cb-db8b8a5d3f21",
       "name": "Clone/Pull Code",
-      "type": "n8n-nodes-base.executeCommand",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [620, 300]
     },
     {
       "parameters": {
-        "command": "cd /tmp/web-audit-platform && npm install --package-lock-only && npm audit --json",
-        "options": {
-          "alwaysOutputResult": true
-        }
+        "jsCode": "const { execSync } = require('child_process');\n\nlet output;\ntry {\n  const cmd = `cd /tmp/web-audit-platform/repo && npm install --package-lock-only && npm audit --json`;\n  output = execSync(cmd, { encoding: 'utf-8' });\n} catch (error) {\n  output = error.stdout || '{}';\n}\n\nlet vulnerabilities = 0;\nlet auditData = {};\ntry {\n  auditData = JSON.parse(output);\n  vulnerabilities = auditData.metadata?.vulnerabilities?.critical || 0;\n} catch(e) {}\n\nconst previousData = $input.first().json;\nreturn [{ json: { ...previousData, auditOutput: auditData, critical_vulnerabilities: vulnerabilities } }];"
       },
       "id": "4b68e001-c852-4fc8-9f15-bc758369165d",
       "name": "Dependency Audit",
-      "type": "n8n-nodes-base.executeCommand",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [840, 300]
     },
     {
       "parameters": {
-        "command": "cd /tmp/web-audit-platform && npm install eslint --no-save && npx eslint . --format json",
-        "options": {
-          "alwaysOutputResult": true
-        }
+        "jsCode": "const { execSync } = require('child_process');\n\nlet output;\ntry {\n  const cmd = `cd /tmp/web-audit-platform/repo && npm install eslint --no-save && npx eslint . --format json`;\n  output = execSync(cmd, { encoding: 'utf-8' });\n} catch (error) {\n  output = error.stdout || '[]';\n}\n\nlet complexityErrors = 0;\nlet eslintData = [];\ntry {\n  eslintData = JSON.parse(output);\n  complexityErrors = eslintData.reduce((acc, current) => acc + current.errorCount, 0);\n} catch(e) {}\n\nconst previousData = $input.first().json;\nreturn [{\n  json: {\n    ...previousData,\n    complexityErrors: complexityErrors,\n    eslintData: eslintData,\n    scannedAt: new Date().toISOString()\n  }\n}];"
       },
       "id": "3c847e11-e123-4abc-999d-ed8731234bef",
       "name": "Complexity Scan",
-      "type": "n8n-nodes-base.executeCommand",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [1060, 300]
     },
     {
       "parameters": {
-        "rules": {
-          "values": [
-            {
-              "value1": "={{ JSON.parse($node[\"Dependency Audit\"].json.stdout).metadata.vulnerabilities.critical || 0 }}",
-              "operation": "larger",
-              "value2": 0,
-              "fallbackOutput": 1
-            },
-            {
-              "value1": "={{ (JSON.parse($node[\"Complexity Scan\"].json.stdout)[0] && JSON.parse($node[\"Complexity Scan\"].json.stdout).reduce((acc, current) => acc + current.errorCount, 0)) || 0 }}",
-              "operation": "larger",
-              "value2": 0,
-              "fallbackOutput": 2
-            }
-          ]
-        },
-        "fallbackOutput": 3
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
       },
-      "id": "de587c12-320c-4e8c-8f11-9a7412e09abc",
-      "name": "Evaluate Audit Results",
-      "type": "n8n-nodes-base.switch",
-      "typeVersion": 1,
+      "id": "4f47f088-7a60-4d87-8a06-d7d08de5fec5",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
       "position": [1300, 300]
-    },
-    {
-      "parameters": {},
-      "id": "a92e34bd-4411-417c-88eb-8b38914902cd",
-      "name": "AI Hook (Future Claude Triage)",
-      "type": "n8n-nodes-base.noOp",
-      "typeVersion": 1,
-      "position": [1560, 200]
-    },
-    {
-      "parameters": {},
-      "id": "bf8472da-8811-4ccc-aa82-77eb915903df",
-      "name": "Audit Passed Successfully",
-      "type": "n8n-nodes-base.noOp",
-      "typeVersion": 1,
-      "position": [1560, 420]
     }
   ],
   "connections": {
-    "GitHub Webhook Trigger": {
+    "Webhook": {
       "main": [
         [
           {
@@ -129,32 +94,7 @@
       "main": [
         [
           {
-            "node": "Evaluate Audit Results",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Evaluate Audit Results": {
-      "main": [
-        [
-          {
-            "node": "AI Hook (Future Claude Triage)",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "AI Hook (Future Claude Triage)",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Audit Passed Successfully",
+            "node": "Respond to Webhook",
             "type": "main",
             "index": 0
           }
