@@ -38,7 +38,7 @@ function OverallRing({ score }) {
 }
 
 export default function Report({ report, onReset }) {
-  const { repoUrl, scannedAt, auditOutput, complexityErrors, eslintData, auditError, eslintError, aiSuggestions } = report
+  const { repoUrl, scannedAt, auditOutput, complexityErrors, eslintData, parsedFiles, skippedFiles, auditError, eslintError, aiSuggestions } = report
 
   // Basic scoring logic: 100 points minus deductions
   const critical = auditOutput?.metadata?.vulnerabilities?.critical || 0
@@ -248,23 +248,35 @@ export default function Report({ report, onReset }) {
           )}
           {(eslintData && eslintData.length > 0) ? (
             <div style={{ background: 'var(--bg)', padding: '1rem', borderRadius: 8, maxHeight: 200, overflowY: 'auto' }}>
-              {eslintData.filter(f => f.errorCount > 0).map((file, idx) => (
-                <div key={idx} style={{ marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid var(--border)' }}>
+              {eslintData.map((func, idx) => (
+                <div key={idx} style={{ marginBottom: '1rem', paddingBottom: '1rem', borderBottom: idx === eslintData.length - 1 ? 'none' : '1px solid var(--border)' }}>
                   <div style={{ fontSize: '0.85rem', fontFamily: 'var(--font-mono)', color: '#a5b4fc', marginBottom: 8, wordBreak: 'break-all' }}>
-                    {file.filePath.split('/repo/').pop()}
+                    {func.filePath} (Line {func.line})
                   </div>
-                  {file.messages.map((m, i) => (
-                    <div key={i} style={{ display: 'flex', gap: 8, color: 'var(--text-secondary)', fontSize: '0.8rem', marginBottom: 4 }}>
-                      <span style={{ color: 'var(--fail)' }}>✗</span>
-                      <span>Line {m.line}: {m.message}</span>
-                    </div>
-                  ))}
+                  <div style={{ display: 'flex', gap: 8, color: 'var(--text-secondary)', fontSize: '0.8rem', marginBottom: 4 }}>
+                    <span style={{ color: 'var(--fail)' }}>✗</span>
+                    <span>Function <strong style={{color: 'var(--text)'}}>{func.functionName}</strong> has complexity of <strong style={{color: 'var(--fail)'}}>{func.complexity}</strong></span>
+                  </div>
                 </div>
               ))}
             </div>
           ) : (
             <div style={{ background: 'var(--bg)', padding: '1rem', borderRadius: 8, fontSize: '0.85rem', color: 'var(--pass)', fontFamily: 'var(--font-mono)' }}>
                No overly complex files found!
+            </div>
+          )}
+
+          {parsedFiles && (
+            <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                  <h4 style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Files Parsed ({parsedFiles.length})</h4>
+                  {skippedFiles && skippedFiles.length > 0 && (
+                    <h4 style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Files Skipped ({skippedFiles.length})</h4>
+                  )}
+               </div>
+               <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', maxHeight: 100, overflowY: 'auto', background: 'var(--bg)', padding: '0.75rem', borderRadius: 6 }}>
+                  {parsedFiles.join(', ')}
+               </div>
             </div>
           )}
         </div>
