@@ -25,7 +25,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const { execSync } = require('child_process');\n\nlet vulnerabilities = 0;\nlet auditData = {};\nlet auditError = null;\n\ntry {\n  const cmd = `find /tmp/web-audit-platform/repo -name \"package.json\" -not -path \"*/node_modules/*\" -exec dirname {} \\\\;`;\n  const dirs = execSync(cmd, { encoding: 'utf-8' }).split('\\n').filter(Boolean);\n\n  if (dirs.length === 0) {\n    auditError = 'No package.json found in repository';\n  }\n\n  for (const dir of dirs) {\n    try {\n      execSync(`cd \"${dir}\" && npm install --package-lock-only 2>&1`, { timeout: 120000 });\n      execSync(`cd \"${dir}\" && npm audit --json 2>&1`, { encoding: 'utf-8' });\n    } catch (err) {\n      if (err.stdout) {\n        try {\n          const parsed = JSON.parse(err.stdout);\n          vulnerabilities += (parsed.metadata?.vulnerabilities?.critical || 0) + (parsed.metadata?.vulnerabilities?.high || 0);\n          auditData = parsed;\n        } catch (e) {\n          auditError = 'Could not parse npm audit output';\n        }\n      }\n    }\n  }\n} catch (error) {\n  auditError = error.message;\n}\n\nconst repoUrl = $input.first().json.repoUrl;\nreturn [{ json: { repoUrl, auditOutput: auditData, critical_vulnerabilities: vulnerabilities, auditError } }];"
+        "jsCode": "const { execSync } = require('child_process');\nconst repoUrl = $input.first().json.repoUrl;\n\nlet vulnerabilities = 0;\nlet auditData = { vulnerabilities: {} };\nlet auditError = null;\n\ntry {\n  let foundAny = false;\n\n  // 1. Check for Node.js (package.json)\n  const nodeDirs = execSync(`find /tmp/web-audit-platform/repo -name \"package.json\" -not -path \"*/node_modules/*\" -exec dirname {} \\\\;`, { encoding: 'utf-8' }).split('\\n').filter(Boolean);\n  \n  if (nodeDirs.length > 0) foundAny = true;\n\n  for (const dir of nodeDirs) {\n    try {\n      execSync(`cd \"${dir}\" && npm install --package-lock-only --ignore-scripts 2>&1`, { timeout: 120000 });\n      execSync(`cd \"${dir}\" && npm audit --json 2>&1`, { encoding: 'utf-8' });\n    } catch (err) {\n      if (err.stdout) {\n        try {\n          const parsed = JSON.parse(err.stdout);\n          vulnerabilities += (parsed.metadata?.vulnerabilities?.critical || 0) + (parsed.metadata?.vulnerabilities?.high || 0);\n          if (parsed.vulnerabilities) {\n             Object.assign(auditData.vulnerabilities, parsed.vulnerabilities);\n          }\n        } catch (e) {}\n      }\n    }\n  }\n\n  // 2. Check for Python (requirements.txt)\n  const pyDirs = execSync(`find /tmp/web-audit-platform/repo -name \"requirements.txt\" -not -path \"*/venv/*\" -exec dirname {} \\\\;`, { encoding: 'utf-8' }).split('\\n').filter(Boolean);\n  \n  if (pyDirs.length > 0) foundAny = true;\n\n  const pythonCmd = (() => { try { execSync('python3 --version 2>&1'); return 'python3'; } catch(e) { return 'python'; } })();\n  \n  for (const dir of pyDirs) {\n    try {\n      const cmd = `pip-audit -r requirements.txt -f json 2>&1`;\n      execSync(`cd \"${dir}\" && ${cmd}`, { encoding: 'utf-8' });\n    } catch (err) {\n      if (err.stdout) {\n        try {\n          const jsonMatch = err.stdout.match(/\\[.*\\]/s);\n          const parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : JSON.parse(err.stdout);\n          for (const pkg of parsed) {\n             if (pkg.vulns && pkg.vulns.length > 0) {\n                vulnerabilities += pkg.vulns.length;\n                auditData.vulnerabilities[pkg.name] = {\n                   name: pkg.name,\n                   severity: 'high',\n                   via: pkg.vulns.map(v => ({ title: v.aliases?.[0] || v.id }))\n                };\n             }\n          }\n        } catch (e) {}\n      }\n    }\n  }\n\n  if (!foundAny) {\n    auditError = 'No package.json or requirements.txt found in repository';\n  }\n\n} catch (error) {\n  auditError = error.message;\n}\n\nconst finalAuditOutput = {\n  metadata: { vulnerabilities: { critical: 0, high: vulnerabilities } },\n  vulnerabilities: auditData.vulnerabilities\n};\n\nreturn [{ json: { repoUrl, auditOutput: finalAuditOutput, critical_vulnerabilities: vulnerabilities, auditError } }];"
       },
       "id": "4b68e001-c852-4fc8-9f15-bc758369165d",
       "name": "Dependency Audit",
@@ -35,7 +35,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const { execSync } = require('child_process');\n\nlet complexityErrors = 0;\nlet eslintData = [];\nlet eslintError = null;\n\ntry {\n  const pythonCmd = (() => { try { execSync('python3 --version 2>&1'); return 'python3'; } catch(e) { try { execSync('python --version 2>&1'); return 'python'; } catch(e2) { return null; } } })();\n  if (!pythonCmd) throw new Error('Python not available in this environment');\n  execSync(`${pythonCmd} -m pip install lizard --quiet 2>&1`, { timeout: 60000 });\n  const cmd = `${pythonCmd} -m lizard /tmp/web-audit-platform/repo --csv -C 10 2>&1 || true`;\n  const output = execSync(cmd, { encoding: 'utf-8', timeout: 60000 });\n  const lines = output.trim().split('\\n').filter(Boolean);\n  for (const line of lines) {\n    const parts = line.split(',');\n    if (parts.length >= 8) {\n      const ccn = parseInt(parts[2]);\n      if (!isNaN(ccn) && ccn > 10) {\n        complexityErrors++;\n        eslintData.push({\n          filePath: parts[0]?.trim().split('/repo/').pop(),\n          functionName: parts[7]?.trim(),\n          complexity: ccn,\n          line: parts[5]?.trim()\n        });\n      }\n    }\n  }\n} catch (error) {\n  eslintError = error.message;\n}\n\nconst prev = $input.first().json;\nreturn [{\n  json: {\n    repoUrl: prev.repoUrl,\n    scannedAt: new Date().toISOString(),\n    critical_vulnerabilities: prev.critical_vulnerabilities,\n    auditOutput: prev.auditOutput,\n    auditError: prev.auditError || null,\n    complexityErrors,\n    eslintData,\n    eslintError: eslintError || null\n  }\n}];"
+        "jsCode": "const { execSync } = require('child_process');\n\nlet complexityErrors = 0;\nlet eslintData = [];\nlet eslintError = null;\nlet parsedFiles = [];\nlet skippedFiles = [];\n\ntry {\n  const pythonCmd = (() => { try { execSync('python3 --version 2>&1'); return 'python3'; } catch(e) { try { execSync('python --version 2>&1'); return 'python'; } catch(e2) { return null; } } })();\n  if (!pythonCmd) throw new Error('Python not available in this environment');\n  \n  const cmd = `${pythonCmd} -m lizard /tmp/web-audit-platform/repo --csv -C 10 -x \"*/node_modules/*\" -x \"*/test/*\" -x \"*/dist/*\" -x \"*/build/*\" -x \"*/venv/*\" 2>&1 || true`;\n  const output = execSync(cmd, { encoding: 'utf-8', timeout: 60000 });\n  const lines = output.trim().split('\\n').filter(Boolean);\n  \n  const parsedSet = new Set();\n  \n  for (const line of lines) {\n    const parts = line.split(',');\n    if (parts.length >= 8) {\n      const ccn = parseInt(parts[1]);\n      if (!isNaN(ccn)) {\n        let filePathRaw = parts[6] ? parts[6].replace(/\"/g, '') : '';\n        if (filePathRaw.includes('/repo/')) {\n           filePathRaw = filePathRaw.split('/repo/').pop();\n           parsedSet.add(filePathRaw);\n        }\n        if (ccn > 10) {\n          complexityErrors++;\n          eslintData.push({\n            filePath: filePathRaw,\n            functionName: parts[7] ? parts[7].trim().replace(/\"/g, '') : '',\n            complexity: ccn,\n            line: parts[5] ? parts[5].trim() : ''\n          });\n        }\n      }\n    }\n  }\n  \n  parsedFiles = Array.from(parsedSet);\n  \n  const allFilesCmd = `cd /tmp/web-audit-platform/repo && find . -type f -not -path \"*/\\\\.git/*\" -not -path \"*/node_modules/*\" -not -path \"*/test/*\" -not -path \"*/dist/*\" -not -path \"*/build/*\" -not -path \"*/venv/*\" | sed 's|^./||'`;\n  const allFilesOutput = execSync(allFilesCmd, { encoding: 'utf-8' });\n  const allFiles = allFilesOutput.trim().split('\\n').filter(Boolean);\n  \n  skippedFiles = allFiles.filter(f => !parsedSet.has(f));\n  \n} catch (error) {\n  eslintError = error.message;\n}\n\nconst prev = $input.first().json;\nreturn [{\n  json: {\n    repoUrl: prev.repoUrl,\n    scannedAt: new Date().toISOString(),\n    critical_vulnerabilities: prev.critical_vulnerabilities,\n    auditOutput: prev.auditOutput,\n    auditError: prev.auditError || null,\n    complexityErrors,\n    eslintData,\n    parsedFiles,\n    skippedFiles,\n    eslintError: eslintError || null\n  }\n}];"
       },
       "id": "3c847e11-e123-4abc-999d-ed8731234bef",
       "name": "Complexity Scan",
@@ -45,7 +45,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const d = $input.first().json;\n\nconst vulnList = d.auditOutput?.vulnerabilities\n  ? Object.values(d.auditOutput.vulnerabilities).filter(v => v.severity === 'high' || v.severity === 'critical').map(v => `- ${v.name} (${v.severity}): ${Array.isArray(v.via) ? v.via.filter(x => typeof x === 'object').map(x => x.title).join(', ') : ''}`).join('\\n')\n  : 'None found';\n\nconst complexList = d.eslintData?.slice(0, 20).map(f => `- ${f.filePath} | ${f.functionName} | complexity: ${f.complexity}`).join('\\n') || 'None found';\n\nconst prompt = `You are a senior software engineer reviewing an automated repository audit. Give concrete, actionable suggestions.\n\nRepository: ${d.repoUrl}\nScanned: ${d.scannedAt}\n\n## Dependency Vulnerabilities (High/Critical): ${d.critical_vulnerabilities}\n${vulnList}\n\n## Cyclomatic Complexity Violations (threshold >10): ${d.complexityErrors}\n${complexList}\n\nProvide:\n1. A brief overall assessment (2-3 sentences)\n2. Top 3 priority fixes with specific steps\n3. Any patterns you notice across the codebase`;\n\nreturn [{ json: { ...d, geminiPrompt: prompt } }];"
+        "jsCode": "const d = $input.first().json;\n\nconst vulnList = d.auditOutput?.vulnerabilities\n  ? Object.values(d.auditOutput.vulnerabilities).filter(v => v.severity === 'high' || v.severity === 'critical').map(v => `- ${v.name} (${v.severity}): ${Array.isArray(v.via) ? v.via.filter(x => typeof x === 'object').map(x => x.title).join(', ') : ''}`).join('\\n')\n  : 'None found';\n\nconst complexList = d.eslintData?.slice(0, 20).map(f => `- ${f.filePath} | ${f.functionName} | complexity: ${f.complexity}`).join('\\n') || 'None found';\n\nconst prompt = `You are an expert DevSecOps AI. Analyze this audit data and return your response in the EXACT following format. Do not deviate.\\n\\nRepository: ${d.repoUrl}\\nScanned: ${d.scannedAt}\\nCritical/High Vulnerabilities: ${d.critical_vulnerabilities}\\nComplexity Violations: ${d.complexityErrors}\\n\\nVulnerability Details:\\n${vulnList}\\n\\nComplexity Details:\\n${complexList}\\n\\n=== CODE QUALITY AUDIT REPORT ===\\nSource: ${d.repoUrl}\\nScanned At: ${d.scannedAt}\\n\\n--- AI EXECUTIVE SUMMARY ---\\n[Provide a concise executive summary assessing the codebase complexity and dependency security posture based on the provided metrics.]\\n\\n--- COMPLEXITY METRICS ---\\nTotal Violations: ${d.complexityErrors}\\nOverall Grade: [Assign A, B, C, D, or F based on the violations]\\nFunctions Exceeding Limits: ${d.complexityErrors}\\nTop Violations: \\n[List the worst complexity violations provided in the details]\\n\\n--- DEPENDENCY SECURITY ---\\nTotal Vulnerabilities (High/Critical): ${d.critical_vulnerabilities}\\n\\n⚠ CRITICAL & HIGH ISSUES:\\n[List the specific vulnerable packages and their severity, or state 'None found' if 0]`;\n\nreturn [{ json: { ...d, geminiPrompt: prompt } }];"
       },
       "id": "build-prompt-node",
       "name": "Build Gemini Prompt",
@@ -56,7 +56,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=AIzaSyDEWLxtMRlGTl-HFxcmrctE2bvHpDrYga4",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=GEMINI_API_KEY",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -72,7 +72,8 @@
       "name": "Call Gemini",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1300, 300]
+      "position": [1300, 300],
+      "continueOnFail": true
     },
     {
       "parameters": {
@@ -108,7 +109,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const d = $input.first().json;\nreturn [{ json: {\n  scannedAt: d.scannedAt,\n  repoUrl: d.repoUrl,\n  fullReport: JSON.stringify({\n    critical_vulnerabilities: d.critical_vulnerabilities,\n    auditOutput: d.auditOutput,\n    complexityErrors: d.complexityErrors,\n    eslintData: d.eslintData,\n    auditError: d.auditError,\n    eslintError: d.eslintError,\n    aiSuggestions: d.aiSuggestions\n  })\n} }];"
+        "jsCode": "const d = $input.first().json;\nlet reportStr = JSON.stringify({\n  critical_vulnerabilities: d.critical_vulnerabilities,\n  auditOutput: d.auditOutput,\n  complexityErrors: d.complexityErrors,\n  eslintData: d.eslintData,\n  auditError: d.auditError,\n  eslintError: d.eslintError,\n  aiSuggestions: d.aiSuggestions\n});\nif (reportStr.length > 48000) {\n  reportStr = reportStr.substring(0, 48000) + '... [TRUNCATED]';\n}\nreturn [{ json: {\n  scannedAt: d.scannedAt,\n  repoUrl: d.repoUrl,\n  fullReport: reportStr\n} }];"
       },
       "id": "full-report-prep-node",
       "name": "Prepare Full Report",
@@ -129,7 +130,10 @@
           "value": "Sheet2",
           "mode": "name"
         },
-        "mappingMode": "autoMapInputData",
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
         "options": {}
       },
       "id": "google-sheets-node",
@@ -151,7 +155,10 @@
           "value": "FullReports",
           "mode": "name"
         },
-        "mappingMode": "autoMapInputData",
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
         "options": {}
       },
       "id": "google-sheets-full-node",
