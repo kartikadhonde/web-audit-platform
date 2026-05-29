@@ -11,7 +11,7 @@
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
-      "position": [400, 300]
+      "position": [200, 300]
     },
     {
       "parameters": {
@@ -21,7 +21,7 @@
       "name": "Clone/Pull Code",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [620, 300]
+      "position": [420, 300]
     },
     {
       "parameters": {
@@ -31,17 +31,70 @@
       "name": "Dependency Audit",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [840, 300]
+      "position": [640, 300]
     },
     {
       "parameters": {
-        "jsCode": "const { execSync } = require('child_process');\n\nlet output = '[]';\nlet complexityErrors = 0;\nlet eslintData = [];\nlet eslintError = null;\n\ntry {\n  const setupCmd = `cd /tmp/web-audit-platform/repo && npm install eslint@8 --no-save 2>&1 && echo '{\"env\":{\"browser\":true,\"node\":true,\"es2021\":true},\"extends\":\"eslint:recommended\",\"parserOptions\":{\"ecmaVersion\":12,\"sourceType\":\"module\",\"ecmaFeatures\":{\"jsx\":true}},\"rules\":{\"complexity\":[\"error\",10]}}' > .eslintrc.json`;\n  execSync(setupCmd, { timeout: 120000 });\n  const cmd = `cd /tmp/web-audit-platform/repo && npx eslint . --ext .js,.jsx,.ts,.tsx --format json 2>&1 || true`;\n  output = execSync(cmd, { encoding: 'utf-8', timeout: 60000 });\n} catch (error) {\n  output = error.stdout || '[]';\n  eslintError = error.message;\n}\n\ntry {\n  const parsed = JSON.parse(output);\n  if (Array.isArray(parsed)) {\n    eslintData = parsed;\n    complexityErrors = parsed.reduce((acc, cur) => acc + cur.errorCount, 0);\n  }\n} catch(e) {\n  eslintError = 'Could not parse ESLint output';\n}\n\nconst prev = $input.first().json;\nreturn [{\n  json: {\n    repoUrl: prev.repoUrl,\n    scannedAt: new Date().toISOString(),\n    critical_vulnerabilities: prev.critical_vulnerabilities,\n    auditOutput: prev.auditOutput,\n    auditError: prev.auditError || null,\n    complexityErrors,\n    eslintData,\n    eslintError: eslintError || null\n  }\n}];"
+        "jsCode": "const { execSync } = require('child_process');\n\nlet complexityErrors = 0;\nlet eslintData = [];\nlet eslintError = null;\n\ntry {\n  const pythonCmd = (() => { try { execSync('python3 --version 2>&1'); return 'python3'; } catch(e) { try { execSync('python --version 2>&1'); return 'python'; } catch(e2) { return null; } } })();\n  if (!pythonCmd) throw new Error('Python not available in this environment');\n  execSync(`${pythonCmd} -m pip install lizard --quiet 2>&1`, { timeout: 60000 });\n  const cmd = `${pythonCmd} -m lizard /tmp/web-audit-platform/repo --csv -C 10 2>&1 || true`;\n  const output = execSync(cmd, { encoding: 'utf-8', timeout: 60000 });\n  const lines = output.trim().split('\\n').filter(Boolean);\n  for (const line of lines) {\n    const parts = line.split(',');\n    if (parts.length >= 8) {\n      const ccn = parseInt(parts[2]);\n      if (!isNaN(ccn) && ccn > 10) {\n        complexityErrors++;\n        eslintData.push({\n          filePath: parts[0]?.trim().split('/repo/').pop(),\n          functionName: parts[7]?.trim(),\n          complexity: ccn,\n          line: parts[5]?.trim()\n        });\n      }\n    }\n  }\n} catch (error) {\n  eslintError = error.message;\n}\n\nconst prev = $input.first().json;\nreturn [{\n  json: {\n    repoUrl: prev.repoUrl,\n    scannedAt: new Date().toISOString(),\n    critical_vulnerabilities: prev.critical_vulnerabilities,\n    auditOutput: prev.auditOutput,\n    auditError: prev.auditError || null,\n    complexityErrors,\n    eslintData,\n    eslintError: eslintError || null\n  }\n}];"
       },
       "id": "3c847e11-e123-4abc-999d-ed8731234bef",
       "name": "Complexity Scan",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1060, 300]
+      "position": [860, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.first().json;\n\nconst vulnList = d.auditOutput?.vulnerabilities\n  ? Object.values(d.auditOutput.vulnerabilities).filter(v => v.severity === 'high' || v.severity === 'critical').map(v => `- ${v.name} (${v.severity}): ${Array.isArray(v.via) ? v.via.filter(x => typeof x === 'object').map(x => x.title).join(', ') : ''}`).join('\\n')\n  : 'None found';\n\nconst complexList = d.eslintData?.slice(0, 20).map(f => `- ${f.filePath} | ${f.functionName} | complexity: ${f.complexity}`).join('\\n') || 'None found';\n\nconst prompt = `You are a senior software engineer reviewing an automated repository audit. Give concrete, actionable suggestions.\n\nRepository: ${d.repoUrl}\nScanned: ${d.scannedAt}\n\n## Dependency Vulnerabilities (High/Critical): ${d.critical_vulnerabilities}\n${vulnList}\n\n## Cyclomatic Complexity Violations (threshold >10): ${d.complexityErrors}\n${complexList}\n\nProvide:\n1. A brief overall assessment (2-3 sentences)\n2. Top 3 priority fixes with specific steps\n3. Any patterns you notice across the codebase`;\n\nreturn [{ json: { ...d, geminiPrompt: prompt } }];"
+      },
+      "id": "build-prompt-node",
+      "name": "Build Gemini Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1080, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=AIzaSyDEWLxtMRlGTl-HFxcmrctE2bvHpDrYga4",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contents\": [{\n    \"parts\": [{ \"text\": {{ JSON.stringify($json.geminiPrompt) }} }]\n  }]\n}",
+        "options": {}
+      },
+      "id": "gemini-node",
+      "name": "Call Gemini",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1300, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const scanData = $node['Build Gemini Prompt'].json;\nconst geminiResponse = $input.first().json;\n\nconst suggestions = geminiResponse?.candidates?.[0]?.content?.parts?.[0]?.text || 'No suggestions available';\n\nreturn [{ json: { ...scanData, aiSuggestions: suggestions } }];"
+      },
+      "id": "merge-node",
+      "name": "Merge Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1520, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "4f47f088-7a60-4d87-8a06-d7d08de5fec5",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1740, 180]
     },
     {
       "parameters": {
@@ -51,19 +104,17 @@
       "name": "Prepare Sheets Data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1280, 420]
+      "position": [1740, 300]
     },
     {
       "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ $node['Complexity Scan'].json }}",
-        "options": {}
+        "jsCode": "const d = $input.first().json;\nreturn [{ json: {\n  scannedAt: d.scannedAt,\n  repoUrl: d.repoUrl,\n  fullReport: JSON.stringify({\n    critical_vulnerabilities: d.critical_vulnerabilities,\n    auditOutput: d.auditOutput,\n    complexityErrors: d.complexityErrors,\n    eslintData: d.eslintData,\n    auditError: d.auditError,\n    eslintError: d.eslintError,\n    aiSuggestions: d.aiSuggestions\n  })\n} }];"
       },
-      "id": "4f47f088-7a60-4d87-8a06-d7d08de5fec5",
-      "name": "Respond to Webhook",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [1280, 180]
+      "id": "full-report-prep-node",
+      "name": "Prepare Full Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1740, 420]
     },
     {
       "parameters": {
@@ -82,72 +133,67 @@
         "options": {}
       },
       "id": "google-sheets-node",
-      "name": "Google Sheets",
+      "name": "Google Sheets Summary",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.2,
-      "position": [1500, 420]
+      "position": [1960, 300]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "10bElszM_XQDEMmVnjnZeJXvKNCWvihRyHkGB9_deHJc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "FullReports",
+          "mode": "name"
+        },
+        "mappingMode": "autoMapInputData",
+        "options": {}
+      },
+      "id": "google-sheets-full-node",
+      "name": "Google Sheets Full Report",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [1960, 420]
     }
   ],
   "connections": {
     "Webhook": {
-      "main": [
-        [
-          {
-            "node": "Clone/Pull Code",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "Clone/Pull Code", "type": "main", "index": 0 }]]
     },
     "Clone/Pull Code": {
-      "main": [
-        [
-          {
-            "node": "Dependency Audit",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "Dependency Audit", "type": "main", "index": 0 }]]
     },
     "Dependency Audit": {
-      "main": [
-        [
-          {
-            "node": "Complexity Scan",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "Complexity Scan", "type": "main", "index": 0 }]]
     },
     "Complexity Scan": {
+      "main": [[{ "node": "Build Gemini Prompt", "type": "main", "index": 0 }]]
+    },
+    "Build Gemini Prompt": {
+      "main": [[{ "node": "Call Gemini", "type": "main", "index": 0 }]]
+    },
+    "Call Gemini": {
+      "main": [[{ "node": "Merge Results", "type": "main", "index": 0 }]]
+    },
+    "Merge Results": {
       "main": [
         [
-          {
-            "node": "Respond to Webhook",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Prepare Sheets Data",
-            "type": "main",
-            "index": 0
-          }
+          { "node": "Respond to Webhook", "type": "main", "index": 0 },
+          { "node": "Prepare Sheets Data", "type": "main", "index": 0 },
+          { "node": "Prepare Full Report", "type": "main", "index": 0 }
         ]
       ]
     },
     "Prepare Sheets Data": {
-      "main": [
-        [
-          {
-            "node": "Google Sheets",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "Google Sheets Summary", "type": "main", "index": 0 }]]
+    },
+    "Prepare Full Report": {
+      "main": [[{ "node": "Google Sheets Full Report", "type": "main", "index": 0 }]]
     }
   }
 }

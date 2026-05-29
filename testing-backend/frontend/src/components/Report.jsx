@@ -38,7 +38,7 @@ function OverallRing({ score }) {
 }
 
 export default function Report({ report, onReset }) {
-  const { repoUrl, scannedAt, auditOutput, complexityErrors, eslintData, auditError, eslintError } = report
+  const { repoUrl, scannedAt, auditOutput, complexityErrors, eslintData, auditError, eslintError, aiSuggestions } = report
 
   // Basic scoring logic: 100 points minus deductions
   const critical = auditOutput?.metadata?.vulnerabilities?.critical || 0
@@ -269,6 +269,29 @@ export default function Report({ report, onReset }) {
           )}
         </div>
       </div>
+
+      {/* AI Suggestions */}
+      {aiSuggestions && (
+        <div className="glass fade-up" style={{ padding: '2rem', marginTop: '1.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem' }}>
+            <span style={{ fontSize: 28 }}>✨</span>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 600 }}>AI Suggestions</h3>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: 4 }}>powered by Gemini</span>
+          </div>
+          <div style={{
+            background: 'var(--bg)',
+            padding: '1.25rem',
+            borderRadius: 8,
+            fontSize: '0.875rem',
+            color: 'var(--text-secondary)',
+            lineHeight: 1.8,
+            whiteSpace: 'pre-wrap',
+            fontFamily: 'var(--font-sans)',
+          }}>
+            {aiSuggestions}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
