@@ -38,7 +38,7 @@ function OverallRing({ score }) {
 }
 
 export default function Report({ report, onReset }) {
-  const { repoUrl, scannedAt, auditOutput, complexityErrors, eslintData } = report
+  const { repoUrl, scannedAt, auditOutput, complexityErrors, eslintData, auditError, eslintError } = report
 
   // Basic scoring logic: 100 points minus deductions
   const critical = auditOutput?.metadata?.vulnerabilities?.critical || 0
@@ -187,6 +187,11 @@ export default function Report({ report, onReset }) {
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem' }}>
             High & Critical vulnerabilities found via npm audit.
           </p>
+          {auditError && (
+            <div style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.3)', padding: '0.75rem 1rem', borderRadius: 8, fontSize: '0.8rem', color: '#f59e0b', marginBottom: '1rem', fontFamily: 'var(--font-mono)' }}>
+              ⚠ {auditError}
+            </div>
+          )}
           {totalVulns > 0 ? (
             <div style={{ background: 'var(--bg)', padding: '1rem', borderRadius: 8, maxHeight: 200, overflowY: 'auto' }}>
               {getVulnList().map((vuln, idx) => (
@@ -236,6 +241,11 @@ export default function Report({ report, onReset }) {
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem' }}>
             Functions exceeding complexity threshold (branching depth &gt; 10).
           </p>
+          {eslintError && (
+            <div style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.3)', padding: '0.75rem 1rem', borderRadius: 8, fontSize: '0.8rem', color: '#f59e0b', marginBottom: '1rem', fontFamily: 'var(--font-mono)' }}>
+              ⚠ {eslintError}
+            </div>
+          )}
           {(eslintData && eslintData.length > 0) ? (
             <div style={{ background: 'var(--bg)', padding: '1rem', borderRadius: 8, maxHeight: 200, overflowY: 'auto' }}>
               {eslintData.filter(f => f.errorCount > 0).map((file, idx) => (

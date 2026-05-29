@@ -15,7 +15,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const { execSync } = require('child_process');\n\nconst repoUrl = $input.first().json.body.repoUrl;\ntry {\n  const cmd = `mkdir -p /tmp/web-audit-platform && cd /tmp/web-audit-platform && rm -rf repo && git clone ${repoUrl} repo`;\n  const stdout = execSync(cmd, { encoding: 'utf-8', stdio: 'pipe' });\n  return [{ json: { repoUrl, success: true, stdout } }];\n} catch (error) {\n  throw new Error(`Failed to clone repository. Are you sure this is a public Git repo?`);\n}"
+        "jsCode": "const { execSync } = require('child_process');\n\nconst repoUrl = $input.first().json.body?.repoUrl || $input.first().json.repoUrl;\nif (!repoUrl) throw new Error('No repoUrl provided in request body');\n\ntry {\n  const cmd = `mkdir -p /tmp/web-audit-platform && cd /tmp/web-audit-platform && rm -rf repo && git clone --depth 1 ${repoUrl} repo 2>&1`;\n  execSync(cmd, { encoding: 'utf-8', timeout: 60000 });\n  return [{ json: { repoUrl } }];\n} catch (error) {\n  throw new Error(`Failed to clone repository: ${error.message}. Make sure this is a public Git repo URL (e.g. https://github.com/user/repo).`);\n}"
       },
       "id": "5f606da0-d29b-4f9e-99cb-db8b8a5d3f21",
       "name": "Clone/Pull Code",
@@ -25,7 +25,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const { execSync } = require('child_process');\n\nlet vulnerabilities = 0;\nlet auditData = {};\n\ntry {\n  const cmd = `find /tmp/web-audit-platform/repo -name \"package.json\" -not -path \"*/node_modules/*\" -exec dirname {} \\\\;`;\n  const dirs = execSync(cmd, { encoding: 'utf-8' }).split('\\n').filter(Boolean);\n  \n  for (const dir of dirs) {\n    try {\n      execSync(`cd \"${dir}\" && npm install --package-lock-only`, { stdio: 'ignore' });\n      execSync(`cd \"${dir}\" && npm audit --json`, { encoding: 'utf-8', stdio: 'pipe' });\n    } catch (err) {\n      if (err.stdout) {\n        try {\n          const parsed = JSON.parse(err.stdout);\n          vulnerabilities += parsed.metadata?.vulnerabilities?.critical || 0;\n          auditData = parsed; // Keep the last one for reference\n        } catch (e) {}\n      }\n    }\n  }\n} catch (error) {\n}\n\nconst previousData = $input.first().json;\nreturn [{ json: { ...previousData, auditOutput: auditData, critical_vulnerabilities: vulnerabilities } }];"
+        "jsCode": "const { execSync } = require('child_process');\n\nlet vulnerabilities = 0;\nlet auditData = {};\nlet auditError = null;\n\ntry {\n  const cmd = `find /tmp/web-audit-platform/repo -name \"package.json\" -not -path \"*/node_modules/*\" -exec dirname {} \\\\;`;\n  const dirs = execSync(cmd, { encoding: 'utf-8' }).split('\\n').filter(Boolean);\n\n  if (dirs.length === 0) {\n    auditError = 'No package.json found in repository';\n  }\n\n  for (const dir of dirs) {\n    try {\n      execSync(`cd \"${dir}\" && npm install --package-lock-only 2>&1`, { timeout: 120000 });\n      execSync(`cd \"${dir}\" && npm audit --json 2>&1`, { encoding: 'utf-8' });\n    } catch (err) {\n      if (err.stdout) {\n        try {\n          const parsed = JSON.parse(err.stdout);\n          vulnerabilities += (parsed.metadata?.vulnerabilities?.critical || 0) + (parsed.metadata?.vulnerabilities?.high || 0);\n          auditData = parsed;\n        } catch (e) {\n          auditError = 'Could not parse npm audit output';\n        }\n      }\n    }\n  }\n} catch (error) {\n  auditError = error.message;\n}\n\nconst repoUrl = $input.first().json.repoUrl;\nreturn [{ json: { repoUrl, auditOutput: auditData, critical_vulnerabilities: vulnerabilities, auditError } }];"
       },
       "id": "4b68e001-c852-4fc8-9f15-bc758369165d",
       "name": "Dependency Audit",
@@ -35,7 +35,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const { execSync } = require('child_process');\n\nlet output;\ntry {\n  const setupCmd = `cd /tmp/web-audit-platform/repo && npm install eslint@8 --no-save && echo '{\"env\":{\"browser\":true,\"node\":true,\"es2021\":true},\"extends\":\"eslint:recommended\",\"parserOptions\":{\"ecmaVersion\":12,\"sourceType\":\"module\"},\"rules\":{\"complexity\":[\"error\",10]}}' > .eslintrc.json`;\n  execSync(setupCmd);\n  const cmd = `cd /tmp/web-audit-platform/repo && npx eslint . --format json`;\n  output = execSync(cmd, { encoding: 'utf-8' });\n} catch (error) {\n  output = error.stdout || '[]';\n}\n\nlet complexityErrors = 0;\nlet eslintData = [];\ntry {\n  eslintData = JSON.parse(output);\n  complexityErrors = eslintData.reduce((acc, current) => acc + current.errorCount, 0);\n} catch(e) {}\n\nconst previousData = $input.first().json;\nreturn [{\n  json: {\n    ...previousData,\n    complexityErrors: complexityErrors,\n    eslintData: eslintData,\n    scannedAt: new Date().toISOString()\n  }\n}];"
+        "jsCode": "const { execSync } = require('child_process');\n\nlet output = '[]';\nlet complexityErrors = 0;\nlet eslintData = [];\nlet eslintError = null;\n\ntry {\n  const setupCmd = `cd /tmp/web-audit-platform/repo && npm install eslint@8 --no-save 2>&1 && echo '{\"env\":{\"browser\":true,\"node\":true,\"es2021\":true},\"extends\":\"eslint:recommended\",\"parserOptions\":{\"ecmaVersion\":12,\"sourceType\":\"module\",\"ecmaFeatures\":{\"jsx\":true}},\"rules\":{\"complexity\":[\"error\",10]}}' > .eslintrc.json`;\n  execSync(setupCmd, { timeout: 120000 });\n  const cmd = `cd /tmp/web-audit-platform/repo && npx eslint . --ext .js,.jsx,.ts,.tsx --format json 2>&1 || true`;\n  output = execSync(cmd, { encoding: 'utf-8', timeout: 60000 });\n} catch (error) {\n  output = error.stdout || '[]';\n  eslintError = error.message;\n}\n\ntry {\n  const parsed = JSON.parse(output);\n  if (Array.isArray(parsed)) {\n    eslintData = parsed;\n    complexityErrors = parsed.reduce((acc, cur) => acc + cur.errorCount, 0);\n  }\n} catch(e) {\n  eslintError = 'Could not parse ESLint output';\n}\n\nconst prev = $input.first().json;\nreturn [{\n  json: {\n    repoUrl: prev.repoUrl,\n    scannedAt: new Date().toISOString(),\n    critical_vulnerabilities: prev.critical_vulnerabilities,\n    auditOutput: prev.auditOutput,\n    auditError: prev.auditError || null,\n    complexityErrors,\n    eslintData,\n    eslintError: eslintError || null\n  }\n}];"
       },
       "id": "3c847e11-e123-4abc-999d-ed8731234bef",
       "name": "Complexity Scan",
@@ -45,33 +45,13 @@
     },
     {
       "parameters": {
-        "operation": "append",
-        "documentId": {
-          "__rl": true,
-          "value": "",
-          "mode": "id"
-        },
-        "sheetName": {
-          "__rl": true,
-          "value": "",
-          "mode": "id"
-        },
-        "mappingMode": "defineBelow",
-        "valuesUi": {
-          "mappingParameters": [
-            { "name": "Date", "value": "={{ $json.scannedAt }}" },
-            { "name": "Repository", "value": "={{ $json.repoUrl }}" },
-            { "name": "Vulnerabilities", "value": "={{ $json.critical_vulnerabilities }}" },
-            { "name": "Complexity Errors", "value": "={{ $json.complexityErrors }}" }
-          ]
-        },
-        "options": {}
+        "jsCode": "const d = $input.first().json;\nreturn [{ json: {\n  scannedAt: d.scannedAt,\n  repoUrl: d.repoUrl,\n  critical_vulnerabilities: d.critical_vulnerabilities,\n  complexityErrors: d.complexityErrors,\n  auditError: d.auditError || '',\n  eslintError: d.eslintError || ''\n} }];"
       },
-      "id": "google-sheets-node",
-      "name": "Google Sheets",
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.2,
-      "position": [1280, 300]
+      "id": "sheets-prep-node",
+      "name": "Prepare Sheets Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1280, 420]
     },
     {
       "parameters": {
@@ -83,7 +63,29 @@
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [1500, 300]
+      "position": [1280, 180]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "10bElszM_XQDEMmVnjnZeJXvKNCWvihRyHkGB9_deHJc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet2",
+          "mode": "name"
+        },
+        "mappingMode": "autoMapInputData",
+        "options": {}
+      },
+      "id": "google-sheets-node",
+      "name": "Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [1500, 420]
     }
   ],
   "connections": {
@@ -124,18 +126,23 @@
       "main": [
         [
           {
-            "node": "Google Sheets",
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Prepare Sheets Data",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Google Sheets": {
+    "Prepare Sheets Data": {
       "main": [
         [
           {
-            "node": "Respond to Webhook",
+            "node": "Google Sheets",
             "type": "main",
             "index": 0
           }
