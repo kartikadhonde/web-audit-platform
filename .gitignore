@@ -5,3 +5,8 @@ node_modules/
 dist/
 coverage/
 *.log
+
+# Generated Documentation
+*.docx
+*.pdf
+Project_Documentation.*
