@@ -202,10 +202,10 @@ export default function URLInput({ onScan, error }) {
         justifyContent: 'center',
       }}>
         {[
-          { icon: '📦', label: 'Git Clone' },
-          { icon: '📥', label: 'Dependencies' },
-          { icon: '🔒', label: 'npm audit' },
-          { icon: '🧠', label: 'ESLint Complexity' },
+          { icon: '', label: 'Git Clone' },
+          { icon: '', label: 'Dependencies' },
+          { icon: '', label: 'npm audit' },
+          { icon: '', label: 'ESLint Complexity' },
         ].map(f => (
           <div key={f.label} style={{
             display: 'flex',

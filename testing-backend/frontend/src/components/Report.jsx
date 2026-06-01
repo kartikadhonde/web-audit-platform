@@ -177,7 +177,7 @@ export default function Report({ report, onReset }) {
         <div className="glass fade-up fade-up-2" style={{ padding: '2rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ fontSize: 28 }}>🔒</span>
+
               <h3 style={{ fontSize: '1.25rem', fontWeight: 600 }}>Security Dependencies</h3>
             </div>
             <span style={{ fontSize: '2rem', fontWeight: 700, color: totalVulns > 0 ? 'var(--fail)' : 'var(--pass)' }}>
@@ -231,7 +231,7 @@ export default function Report({ report, onReset }) {
         <div className="glass fade-up fade-up-3" style={{ padding: '2rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ fontSize: 28 }}>🧠</span>
+
               <h3 style={{ fontSize: '1.25rem', fontWeight: 600 }}>Cyclomatic Complexity</h3>
             </div>
             <span style={{ fontSize: '2rem', fontWeight: 700, color: (complexityErrors || 0) > 0 ? 'var(--fail)' : 'var(--pass)' }}>
@@ -286,7 +286,7 @@ export default function Report({ report, onReset }) {
       {aiSuggestions && (
         <div className="glass fade-up" style={{ padding: '2rem', marginTop: '1.5rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem' }}>
-            <span style={{ fontSize: 28 }}>✨</span>
+
             <h3 style={{ fontSize: '1.25rem', fontWeight: 600 }}>AI Suggestions</h3>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: 4 }}>powered by Gemini</span>
           </div>

@@ -60,11 +60,11 @@ export default function App() {
 
 function LoadingScreen({ url }) {
   const steps = [
-    { label: 'Cloning GitHub repository', icon: '📦', delay: 0 },
-    { label: 'Installing dependencies', icon: '📥', delay: 2.0 },
-    { label: 'Running npm audit', icon: '🔒', delay: 4.0 },
-    { label: 'Analyzing cyclomatic complexity', icon: '🧠', delay: 6.0 },
-    { label: 'Generating metrics', icon: '📊', delay: 8.0 },
+    { label: 'Cloning GitHub repository', icon: '', delay: 0 },
+    { label: 'Installing dependencies', icon: '', delay: 2.0 },
+    { label: 'Running npm audit', icon: '', delay: 4.0 },
+    { label: 'Analyzing cyclomatic complexity', icon: '', delay: 6.0 },
+    { label: 'Generating metrics', icon: '', delay: 8.0 },
   ]
 
   return (
