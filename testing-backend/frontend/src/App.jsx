@@ -3,6 +3,8 @@ import './index.css'
 import URLInput from './components/URLInput'
 import Report from './components/Report'
 
+import PlaywrightReport from './components/PlaywrightReport'
+
 export default function App() {
   const [report, setReport] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -51,7 +53,10 @@ export default function App() {
       {loading && (
         <LoadingScreen url={scannedUrl} />
       )}
-      {report && (
+      {report && report.isPlaywright && (
+        <PlaywrightReport report={report.report} onReset={handleReset} />
+      )}
+      {report && !report.isPlaywright && (
         <Report report={report} onReset={handleReset} />
       )}
     </div>

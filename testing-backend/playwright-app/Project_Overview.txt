@@ -1,0 +1,97 @@
+================================================================================
+PROJECT OVERVIEW: FULL-STACK WEBSITE AUDITING & AI TESTING SYSTEM
+================================================================================
+
+1. EXECUTIVE SUMMARY
+--------------------------------------------------------------------------------
+This project is a comprehensive, terminal-based website testing and auditing 
+platform built on Node.js and Playwright. The system serves two primary functions:
+1. Core Auditing Engine: A parallelized worker system that deeply analyzes a 
+   website across five key domains (Performance, Accessibility, Security, Links, 
+   and Visuals) to generate a standardized score and JSON report.
+2. AI-Driven UI Testing: An autonomous module powered by Google's Gemini AI 
+   that crawls a website, writes end-to-end Playwright tests for every page, 
+   and automatically maintains/heals those tests as the UI changes over time.
+
+By combining deterministic audits with AI-generated behavioral tests, the tool 
+provides a complete, black-box QA solution without requiring access to the 
+target website's source code.
+
+
+2. PART I: THE CORE AUDITING ENGINE (app.js)
+--------------------------------------------------------------------------------
+The foundational system is a high-speed auditing tool. Given any URL, it spins 
+up multiple worker threads to run parallel assessments.
+
+The 5 Auditing Domains:
+- Performance: Measures critical page load metrics across 3 phases (Navigation, 
+  Resource Loading, and DOM Interactive times).
+- Accessibility (a11y): Integrates axe-core to scan the DOM for WCAG compliance 
+  violations (e.g., missing ARIA tags, color contrast issues).
+- Security: Inspects HTTP response headers to ensure best practices (e.g., 
+  Strict-Transport-Security, Content-Security-Policy, X-Frame-Options).
+- Broken Links: Crawls all anchor tags on the page and verifies their HTTP 
+  status codes to ensure no dead endpoints.
+- Visual Screenshot: Captures a full-page, high-resolution rendering of the site.
+
+Reporting & Scoring:
+Results are consolidated by a scoring calculator algorithm that assigns a 
+quantifiable health score to the website. The final output is saved as a 
+structured JSON report in the 'reports/' directory, providing a clear artifact 
+for developers and stakeholders.
+
+
+3. PART II: AI-DRIVEN TEST AUTOMATION (generate, maintain, heal)
+--------------------------------------------------------------------------------
+Alongside the static auditor, the system features an autonomous lifecycle for 
+generating and maintaining end-to-end UI tests.
+
+A. Test Generation (generate.js)
+   - Crawls the target URL and discovers all internal pages.
+   - Extracts an "Aria Snapshot" of each page—a text-based blueprint of all 
+     visible, interactive elements (buttons, forms, links).
+   - Feeds this blueprint to Gemini AI to generate production-ready Playwright 
+     test code for every single page.
+
+B. Auto-Healing (heal.js)
+   - If tests fail during a run (e.g., due to a changed button), the system 
+     reads the Playwright error logs.
+   - It re-crawls the failing page to capture its new visual structure.
+   - It prompts the AI with the broken test code, the exact error, and the new 
+     snapshot. The AI intelligently rewrites the test to fix the failure.
+   - Includes a safety mechanism: tests that fail to heal after 3 attempts are 
+     automatically archived.
+
+C. Continuous Maintenance (maintain.js)
+   - Designed to run after website updates or deployments.
+   - Re-crawls the site and compares the new structural snapshot against the 
+     old baseline sitemap.
+   - Autonomously generates tests for newly added pages, archives tests for 
+     deleted pages, and heals tests for modified pages.
+
+
+4. ARCHITECTURE & TECHNOLOGY STACK
+--------------------------------------------------------------------------------
+- Core Runtime: Node.js (utilizing asynchronous worker threads for speed).
+- Browser Automation: Playwright (headless Chromium engine).
+- Accessibility Engine: @axe-core/playwright.
+- Artificial Intelligence: Google Gemini API (gemini-2.0-flash).
+- Design Philosophy: "Black-box" testing. The tool only interacts with what the 
+  browser renders. It never needs to see the underlying source code.
+
+
+5. BUSINESS VALUE & ROI
+--------------------------------------------------------------------------------
+- Massive Time Savings: Replaces hours of manual QA and test-writing with 
+  instant, AI-generated test coverage and parallel audits.
+- Lower Maintenance Costs: The Auto-Heal function resolves the biggest pain 
+  point in UI testing: brittle tests that break upon minor visual updates.
+- Universal Compatibility: Because it relies strictly on URLs and user-facing 
+  rendered elements (Aria roles), it can test any web application regardless of 
+  what framework (React, Angular, Vue) was used to build it.
+- Actionable Insights: The JSON reports and calculated scores provide management 
+  with immediate, quantifiable metrics regarding site health and stability.
+
+================================================================================
+End of Document
+================================================================================

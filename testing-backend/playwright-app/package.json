@@ -1,0 +1,22 @@
+{
+  "name": "url-website-tester",
+  "version": "1.0.0",
+  "description": "Terminal-based website testing tool using Playwright",
+  "main": "app.js",
+  "scripts": {
+    "test": "node app.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.98.0",
+    "@axe-core/playwright": "^4.9.0",
+    "@google/generative-ai": "^0.24.1",
+    "cheerio": "^1.2.0",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "lighthouse": "^13.3.0",
+    "playwright": "^1.44.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.60.0"
+  }
+}

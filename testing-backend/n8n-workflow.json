@@ -11,18 +11,23 @@
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
-      "position": [200, 300]
+      "position": [
+        200,
+        300
+      ]
     },
     {
       "parameters": {
         "jsCode": "const { execSync } = require('child_process');\n\nconst repoUrl = $input.first().json.body?.repoUrl || $input.first().json.repoUrl;\nif (!repoUrl) throw new Error('No repoUrl provided in request body');\n\ntry {\n  const cmd = `mkdir -p /tmp/web-audit-platform && cd /tmp/web-audit-platform && rm -rf repo && git clone --depth 1 ${repoUrl} repo 2>&1`;\n  execSync(cmd, { encoding: 'utf-8', timeout: 60000 });\n  return [{ json: { repoUrl } }];\n} catch (error) {\n  throw new Error(`Failed to clone repository: ${error.message}. Make sure this is a public Git repo URL (e.g. https://github.com/user/repo).`);\n}"
       },
       "id": "5f606da0-d29b-4f9e-99cb-db8b8a5d3f21",
-      "name": "Clone/Pull Code", 
+      "name": "Clone/Pull Code",
       "type": "n8n-nodes-base.code",
-
       "typeVersion": 2,
-      "position": [420, 300]
+      "position": [
+        420,
+        300
+      ]
     },
     {
       "parameters": {
@@ -32,7 +37,10 @@
       "name": "Dependency Audit",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [640, 300]
+      "position": [
+        640,
+        300
+      ]
     },
     {
       "parameters": {
@@ -42,7 +50,10 @@
       "name": "Complexity Scan",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [860, 300]
+      "position": [
+        860,
+        300
+      ]
     },
     {
       "parameters": {
@@ -52,7 +63,10 @@
       "name": "Build Gemini Prompt",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1080, 300]
+      "position": [
+        1080,
+        300
+      ]
     },
     {
       "parameters": {
@@ -61,7 +75,10 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Content-Type", "value": "application/json" }
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
           ]
         },
         "sendBody": true,
@@ -73,7 +90,10 @@
       "name": "Call Gemini",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1300, 300],
+      "position": [
+        1300,
+        300
+      ],
       "continueOnFail": true
     },
     {
@@ -84,7 +104,10 @@
       "name": "Merge Results",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1520, 300]
+      "position": [
+        1520,
+        300
+      ]
     },
     {
       "parameters": {
@@ -96,7 +119,10 @@
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [1740, 180]
+      "position": [
+        1740,
+        180
+      ]
     },
     {
       "parameters": {
@@ -106,7 +132,10 @@
       "name": "Prepare Sheets Data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1740, 300]
+      "position": [
+        1740,
+        300
+      ]
     },
     {
       "parameters": {
@@ -116,7 +145,10 @@
       "name": "Prepare Full Report",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1740, 420]
+      "position": [
+        1740,
+        420
+      ]
     },
     {
       "parameters": {
@@ -141,7 +173,10 @@
       "name": "Google Sheets Summary",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.2,
-      "position": [1960, 300]
+      "position": [
+        1960,
+        300
+      ]
     },
     {
       "parameters": {
@@ -166,42 +201,176 @@
       "name": "Google Sheets Full Report",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.2,
-      "position": [1960, 420]
+      "position": [
+        1960,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const url = $input.first().json.body?.repoUrl || $input.first().json.repoUrl || $input.first().json.url;\nif (!url) throw new Error('No URL provided');\nif (url.includes('github.com') || url.includes('gitlab.com')) {\n  return [[{ json: { repoUrl: url } }], []];\n} else {\n  return [[], [{ json: { repoUrl: url } }]];\n}"
+      },
+      "id": "smart-router-node",
+      "name": "Smart Router",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        310,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { execSync } = require('child_process');\nconst fs = require('fs');\nconst url = $input.first().json.repoUrl;\n\ntry {\n  // Run playwright app.js\n  const cmd = `cd /home/pwuser/playwright-app && npm install && node app.js ${url}`;\n  execSync(cmd, { encoding: 'utf-8', timeout: 300000 });\n  \n  // Read the generated report.json\n  const reportRaw = fs.readFileSync('/home/pwuser/playwright-app/reports/report.json', 'utf8');\n  const report = JSON.parse(reportRaw);\n  \n  return [{ json: { isPlaywright: true, report } }];\n} catch (error) {\n  return [{ json: { isPlaywright: true, error: error.message } }];\n}"
+      },
+      "id": "playwright-test-node",
+      "name": "Playwright Test",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        500
+      ]
     }
   ],
   "connections": {
-    "Webhook": {
-      "main": [[{ "node": "Clone/Pull Code", "type": "main", "index": 0 }]]
-    },
     "Clone/Pull Code": {
-      "main": [[{ "node": "Dependency Audit", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Dependency Audit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Dependency Audit": {
-      "main": [[{ "node": "Complexity Scan", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Complexity Scan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Complexity Scan": {
-      "main": [[{ "node": "Build Gemini Prompt", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Build Gemini Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Build Gemini Prompt": {
-      "main": [[{ "node": "Call Gemini", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Call Gemini",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Call Gemini": {
-      "main": [[{ "node": "Merge Results", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Merge Results": {
       "main": [
         [
-          { "node": "Respond to Webhook", "type": "main", "index": 0 },
-          { "node": "Prepare Sheets Data", "type": "main", "index": 0 },
-          { "node": "Prepare Full Report", "type": "main", "index": 0 }
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Prepare Sheets Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Prepare Full Report",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
     "Prepare Sheets Data": {
-      "main": [[{ "node": "Google Sheets Summary", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Google Sheets Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Prepare Full Report": {
-      "main": [[{ "node": "Google Sheets Full Report", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Google Sheets Full Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Smart Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Smart Router": {
+      "main": [
+        [
+          {
+            "node": "Clone/Pull Code",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Playwright Test",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Playwright Test": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   }
 }
